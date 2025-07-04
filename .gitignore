@@ -1,0 +1,9 @@
+/twitter-timeline
+*.bak
+*.tmp
+*.swp
+*.log
+.claude
+CLAUDE.md
+.DS_Store
+.vscode
