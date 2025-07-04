@@ -143,6 +143,9 @@ type TweetResult struct {
 		RetweetCount  int `json:"retweet_count"`
 		ReplyCount    int `json:"reply_count"`
 	} `json:"legacy"`
+	RetweetedStatusResult struct {
+		Result *TweetResult `json:"result"`
+	} `json:"retweeted_status_result"`
 	IsPinned  bool     `json:"-"` // Not from JSON, set by code
 	IsRetweet bool     `json:"-"` // Not from JSON, determined by code
 	IsQuoted  bool     `json:"-"` // Not from JSON, determined by code
@@ -489,7 +492,7 @@ func processTweetResult(tweetResult *TweetResult) {
 	}
 
 	// Determine tweet type
-	tweetResult.IsRetweet = tweetResult.Legacy.RetweetedStatusIDStr != "" || strings.HasPrefix(tweetResult.Legacy.FullText, "RT @")
+	tweetResult.IsRetweet = tweetResult.Legacy.RetweetedStatusIDStr != "" || strings.HasPrefix(tweetResult.Legacy.FullText, "RT @") || tweetResult.RetweetedStatusResult.Result != nil
 	tweetResult.IsReply = tweetResult.Legacy.InReplyToStatusIDStr != ""
 	tweetResult.IsQuoted = tweetResult.Legacy.IsQuoteStatus || tweetResult.Legacy.QuotedStatusIDStr != ""
 
@@ -568,6 +571,20 @@ func processTweetResult(tweetResult *TweetResult) {
 
 // convertTweetResult converts TweetResult to public Tweet structure
 func convertTweetResult(tweetResult *TweetResult) Tweet {
+	// Store original retweet flag
+	originalIsRetweet := tweetResult.IsRetweet
+
+	// Check if this is a retweet and replace with original tweet if available
+	if tweetResult.Legacy.RetweetedStatusIDStr != "" || tweetResult.RetweetedStatusResult.Result != nil {
+		originalIsRetweet = true
+		if tweetResult.RetweetedStatusResult.Result != nil {
+			// Process the retweeted status to ensure it has all necessary fields
+			processTweetResult(tweetResult.RetweetedStatusResult.Result)
+			// Replace the current tweet with the retweeted one
+			tweetResult = tweetResult.RetweetedStatusResult.Result
+		}
+	}
+
 	// Extract hashtags as strings
 	var hashtags []string
 	for _, hashtag := range tweetResult.Legacy.Entities.Hashtags {
@@ -606,7 +623,7 @@ func convertTweetResult(tweetResult *TweetResult) Tweet {
 		Retweets:     tweetResult.Legacy.RetweetCount,
 		Replies:      tweetResult.Legacy.ReplyCount,
 		IsPinned:     tweetResult.IsPinned,
-		IsRetweet:    tweetResult.IsRetweet,
+		IsRetweet:    originalIsRetweet,
 		IsQuoted:     tweetResult.IsQuoted,
 		IsReply:      tweetResult.IsReply,
 		Images:       tweetResult.Images,
