@@ -8,6 +8,7 @@ Go library for loading Twitter/X user timeline without authorization.
 - Works **without authorization** (automatic guest token acquisition)
 - **User ID support** - works with numeric Twitter User IDs
 - **Username support** - automatic resolution and caching
+- **Proxy support** - HTTP/HTTPS proxy with authentication
 - **Rich content processing** - HTML generation with clickable links
 - **Complete metadata** - pinned tweets, types (retweet/reply/quote), statistics
 - **Media extraction** - automatic image URL extraction
@@ -46,6 +47,10 @@ import (
 func main() {
     // Create a new Twitter client
     client := twittertimeline.NewClient()
+
+    // Optional: Configure proxy
+    // err := client.SetProxy("http://proxy.example.com:8080")
+    // err := client.SetProxy("https://user:pass@proxy.example.com:8080")
 
     // Option 1: Get user timeline by User ID
     tweets, err := client.GetUserTweets("1624051836033421317")
@@ -101,12 +106,17 @@ func main() {
 ### CLI Usage
 
 ```bash
-./twitter-timeline <user_id_or_username>
+./twitter-timeline [OPTIONS] <user_id_or_username>
 ```
 
 #### Parameters
 
 - `user_id_or_username` - Twitter user ID (numeric) or username (@handle without @)
+
+#### Options
+
+- `-proxy string` - HTTP/HTTPS proxy URL (e.g., `http://proxy:8080` or `https://user:pass@proxy:8080`)
+- `-help`, `-h` - Show help message
 
 #### Examples
 
@@ -116,7 +126,56 @@ func main() {
 
 # Load tweets using username
 ./twitter-timeline elonmusk
+
+# Load tweets using proxy
+./twitter-timeline -proxy http://proxy.example.com:8080 elonmusk
+
+# Load tweets using authenticated proxy
+./twitter-timeline -proxy https://user:pass@proxy.example.com:8080 elonmusk
+
+# Using environment variables for proxy
+HTTP_PROXY=http://proxy:8080 ./twitter-timeline elonmusk
+HTTPS_PROXY=https://proxy:8080 ./twitter-timeline elonmusk
 ```
+
+The CLI tool automatically checks for proxy settings in the following order:
+1. Command line `-proxy` flag (highest priority)
+2. `HTTP_PROXY` environment variable
+3. `HTTPS_PROXY` environment variable
+
+## 🌐 Proxy Configuration
+
+The library supports HTTP/HTTPS proxies with optional authentication:
+
+```go
+client := twittertimeline.NewClient()
+
+// Set proxy without authentication
+err := client.SetProxy("http://proxy.example.com:8080")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Set proxy with authentication
+err = client.SetProxy("https://username:password@proxy.example.com:8080")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Remove proxy and use direct connection
+err = client.SetProxy("")
+if err != nil {
+    log.Fatal(err)
+}
+
+// The proxy setting applies to all subsequent requests
+tweets, err := client.GetUserTweets("1624051836033421317")
+```
+
+When proxy is changed or removed:
+- Cookie jar is automatically reset
+- Guest token is cleared and will be re-acquired
+- All subsequent requests will use the new setting (proxy or direct)
 
 ## 🔍 How to find User ID
 

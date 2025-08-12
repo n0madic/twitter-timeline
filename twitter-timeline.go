@@ -239,12 +239,8 @@ func NewClient() *Client {
 // SetProxy sets HTTP/HTTPS proxy for the client
 // Example: client.SetProxy("http://proxy.example.com:8080")
 // Example: client.SetProxy("https://user:pass@proxy.example.com:8080")
+// To remove proxy: client.SetProxy("")
 func (c *Client) SetProxy(proxyURL string) error {
-	parsedURL, err := url.Parse(proxyURL)
-	if err != nil {
-		return fmt.Errorf("invalid proxy URL: %w", err)
-	}
-
 	// Get the current transport or create a new one
 	transport, ok := c.httpClient.Transport.(*http.Transport)
 	if !ok || transport == nil {
@@ -255,8 +251,19 @@ func (c *Client) SetProxy(proxyURL string) error {
 		}
 	}
 
-	// Set the proxy
-	transport.Proxy = http.ProxyURL(parsedURL)
+	// Handle empty string to remove proxy
+	if proxyURL == "" {
+		// Reset to direct connection (no proxy)
+		transport.Proxy = nil
+	} else {
+		// Parse and set the proxy
+		parsedURL, err := url.Parse(proxyURL)
+		if err != nil {
+			return fmt.Errorf("invalid proxy URL: %w", err)
+		}
+		transport.Proxy = http.ProxyURL(parsedURL)
+	}
+
 	c.httpClient.Transport = transport
 
 	// Reset cookie jar when proxy changes
