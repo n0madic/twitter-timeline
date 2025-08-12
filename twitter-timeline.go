@@ -214,10 +214,18 @@ var userIDCache sync.Map
 
 // NewClient creates a new Twitter client
 func NewClient() *Client {
-	client := &Client{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+	// Create HTTP client with default transport
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
 		},
+	}
+
+	client := &Client{
+		httpClient:  httpClient,
 		bearerToken: BearerToken,
 		cacheTTL:    24 * time.Hour, // Cache for 24 hours
 	}
@@ -226,6 +234,40 @@ func NewClient() *Client {
 	go client.cleanupCache()
 
 	return client
+}
+
+// SetProxy sets HTTP/HTTPS proxy for the client
+// Example: client.SetProxy("http://proxy.example.com:8080")
+// Example: client.SetProxy("https://user:pass@proxy.example.com:8080")
+func (c *Client) SetProxy(proxyURL string) error {
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("invalid proxy URL: %w", err)
+	}
+
+	// Get the current transport or create a new one
+	transport, ok := c.httpClient.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		transport = &http.Transport{
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+		}
+	}
+
+	// Set the proxy
+	transport.Proxy = http.ProxyURL(parsedURL)
+	c.httpClient.Transport = transport
+
+	// Reset cookie jar when proxy changes
+	if jar, err := cookiejar.New(nil); err == nil {
+		c.httpClient.Jar = jar
+	}
+
+	// Reset guest token as it might be tied to the previous IP
+	c.guestToken = ""
+
+	return nil
 }
 
 // cleanupCache periodically removes expired entries from the cache
