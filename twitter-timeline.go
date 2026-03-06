@@ -17,13 +17,13 @@ import (
 
 // Constants for Twitter API
 const (
-	BearerToken = "AAAAAAAAAAAAAAAAAAAAAFQODgEAAAAAVHTp76lzh3rFzcHbmHVvQxYYpTw%3DckAlMINMjmCwxUcaXbAN4XqJVdgMJaHqNOFgPMK0zN1qLqLQCF"
+	BearerToken = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 	BaseURL     = "https://api.x.com"
 	UserAgent   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 
-	// GraphQL API endpoints
-	UserByScreenNamePath = "/graphql/x3RLKWW1Tl7JgU7YtGxuzw/UserByScreenName"
-	UserTweetsPath       = "/graphql/bbmwRjH_roUoWsvbgAJY9g/UserTweets"
+	// GraphQL API endpoints (hashes rotate every 2-4 weeks, update from https://github.com/vladkens/twscrape)
+	UserByScreenNamePath = "/graphql/1VOOyvKkiI3FMmkeDNxM9A/UserByScreenName"
+	UserTweetsPath       = "/graphql/HeWHY26ItCfUmm1e6ITjeA/UserTweets"
 )
 
 // Public API structures
@@ -109,9 +109,9 @@ type TweetResult struct {
 	Core   struct {
 		UserResults struct {
 			Result struct {
-				Core struct {
+				Legacy struct {
 					ScreenName string `json:"screen_name"`
-				} `json:"core"`
+				} `json:"legacy"`
 			} `json:"result"`
 		} `json:"user_results"`
 	} `json:"core"`
@@ -394,22 +394,20 @@ func (c *Client) makeAPICall(endpoint string, variables map[string]any, features
 // GetUserByScreenName gets user information by screen_name (username)
 func (c *Client) GetUserByScreenName(screenName string) (*UserResponse, error) {
 	variables := map[string]any{
-		"screen_name": screenName,
+		"screen_name":              screenName,
+		"withSafetyModeUserFields": true,
 	}
 
 	features := map[string]any{
-		"responsive_web_grok_bio_auto_translation_is_enabled":               false,
-		"hidden_profile_subscriptions_enabled":                              true,
-		"payments_enabled":                                                  false,
-		"profile_label_improvements_pcf_label_in_post_enabled":              true,
-		"rweb_tipjar_consumption_enabled":                                   true,
-		"verified_phone_label_enabled":                                      false,
-		"subscriptions_verification_info_is_identity_verified_enabled":      true,
-		"subscriptions_verification_info_verified_since_enabled":            true,
 		"highlights_tweets_tab_ui_enabled":                                  true,
-		"responsive_web_twitter_article_notes_tab_enabled":                  true,
-		"subscriptions_feature_can_gift_premium":                            true,
+		"hidden_profile_likes_enabled":                                      true,
+		"hidden_profile_subscriptions_enabled":                              true,
 		"creator_subscriptions_tweet_preview_api_enabled":                   true,
+		"subscriptions_verification_info_verified_since_enabled":            true,
+		"subscriptions_verification_info_is_identity_verified_enabled":      false,
+		"responsive_web_twitter_article_notes_tab_enabled":                  false,
+		"subscriptions_feature_can_gift_premium":                            false,
+		"profile_label_improvements_pcf_label_in_post_enabled":              false,
 		"responsive_web_graphql_skip_user_profile_image_extensions_enabled": false,
 		"responsive_web_graphql_timeline_navigation_enabled":                true,
 	}
@@ -473,18 +471,17 @@ func (c *Client) GetUserID(username string) (string, error) {
 func (c *Client) GetUserTweets(userID string) ([]Tweet, error) {
 	variables := map[string]any{
 		"userId":                                 userID,
-		"count":                                  100,
+		"count":                                  40,
 		"includePromotedContent":                 true,
 		"withQuickPromoteEligibilityTweetFields": true,
 		"withVoice":                              true,
+		"withV2Timeline":                         true,
 	}
 
 	features := map[string]any{
 		"rweb_video_screen_enabled":                                               false,
-		"payments_enabled":                                                        false,
-		"profile_label_improvements_pcf_label_in_post_enabled":                    true,
+		"profile_label_improvements_pcf_label_in_post_enabled":                    false,
 		"rweb_tipjar_consumption_enabled":                                         true,
-		"verified_phone_label_enabled":                                            false,
 		"creator_subscriptions_tweet_preview_api_enabled":                         true,
 		"responsive_web_graphql_timeline_navigation_enabled":                      true,
 		"responsive_web_graphql_skip_user_profile_image_extensions_enabled":       false,
@@ -512,6 +509,7 @@ func (c *Client) GetUserTweets(userID string) ([]Tweet, error) {
 		"longform_notetweets_inline_media_enabled":                                true,
 		"responsive_web_grok_image_annotation_enabled":                            true,
 		"responsive_web_enhance_cards_enabled":                                    false,
+		"rweb_video_timestamps_enabled":                                           true,
 	}
 
 	fieldToggles := map[string]any{
@@ -564,7 +562,7 @@ func processTweetResult(tweetResult *TweetResult) {
 	tweetResult.Images = images
 
 	// Set the permanent URL for a tweet
-	screenName := tweetResult.Core.UserResults.Result.Core.ScreenName
+	screenName := tweetResult.Core.UserResults.Result.Legacy.ScreenName
 	if screenName != "" {
 		tweetResult.URL = fmt.Sprintf("https://x.com/%s/status/%s", screenName, tweetResult.RestID)
 	}
@@ -666,7 +664,7 @@ func convertTweetResult(tweetResult *TweetResult) Tweet {
 		HTML:         tweetResult.HTML,
 		CreatedAt:    tweetResult.Legacy.CreatedAt,
 		PermanentURL: tweetResult.URL,
-		Username:     tweetResult.Core.UserResults.Result.Core.ScreenName,
+		Username:     tweetResult.Core.UserResults.Result.Legacy.ScreenName,
 		UserID:       tweetResult.Legacy.UserIDStr,
 		Likes:        tweetResult.Legacy.FavoriteCount,
 		Retweets:     tweetResult.Legacy.RetweetCount,
